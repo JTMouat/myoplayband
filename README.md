@@ -16,7 +16,7 @@ pensada para apoyar la rehabilitación de miembro superior post-ACV.
 ESP32-S3 → broker MQTT público (`broker.emqx.io`) → esta página (MQTT sobre WebSocket).
 
 ## Uso
-1. Abrir **broker.emqx.io**.
+1. Abrir **https://mqttx.app/web-client**.
 2. **New Subscription** y dejar **myoplayband/grupo8_basti_jt/#** en el topic.
 3. Abrir la GitHub-Page expuesta arriba y elegir **En vivo (MQTT)**.
 4. Apretar **Conectar**.
