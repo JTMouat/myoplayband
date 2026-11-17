@@ -18,7 +18,7 @@ ESP32-S3 → broker MQTT público (`broker.emqx.io`) → esta página (MQTT sobr
 ## Uso
 1. Abrir **broker.emqx.io**.
 2. **New Subscription** y dejar **myoplayband/grupo8_basti_jt/#** en el topic.
-3. Abrir la página y elegir **En vivo (MQTT)**.
+3. Abrir la GitHub-Page expuesta arriba y elegir **En vivo (MQTT)**.
 4. Apretar **Conectar**.
 5. Encender la banda y calibrar con el brazo en la posición inicial.
 
