@@ -25,4 +25,4 @@ ESP32-S3 → broker MQTT público (`broker.emqx.io`) → esta página (MQTT sobr
 También tiene un modo **Demostración** y la opción **Simular placa** para probar sin hardware.
 
 ## Equipo
-Proyecto de Diseño Eléctrico — Universidad de los Andes.
+Grupo 8, Proyecto de Diseño Eléctrico 2026_20 — Universidad de los Andes.
