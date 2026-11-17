@@ -3,7 +3,7 @@
 Panel web para monitorear en tiempo real la **MyoPlayBand**, una banda con ESP32-S3
 pensada para apoyar la rehabilitación de miembro superior post-ACV.
 
-🔗 **Página:** https://TU_USUARIO.github.io/myoplayband/
+🔗 **Página:** https://jtmouat.github.io/myoplayband/
 
 ## Qué hace
 - Muestra un monito 2D que sigue el movimiento real del brazo (MPU6050).
