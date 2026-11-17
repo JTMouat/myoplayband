@@ -16,9 +16,11 @@ pensada para apoyar la rehabilitación de miembro superior post-ACV.
 ESP32-S3 → broker MQTT público (`broker.emqx.io`) → esta página (MQTT sobre WebSocket).
 
 ## Uso
-1. Abrir la página y elegir **En vivo (MQTT)**.
-2. Apretar **Conectar**.
-3. Encender la banda y calibrar con el brazo en la posición inicial.
+1. Abrir **broker.emqx.io**.
+2. **New Subscription** y dejar **myoplayband/grupo8_basti_jt/#** en el topic.
+3. Abrir la página y elegir **En vivo (MQTT)**.
+4. Apretar **Conectar**.
+5. Encender la banda y calibrar con el brazo en la posición inicial.
 
 También tiene un modo **Demostración** y la opción **Simular placa** para probar sin hardware.
 
