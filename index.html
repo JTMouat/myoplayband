@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MyoPlayBand · Panel en vivo</title>
+<script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#eef5fb;--card:#fff;--ink:#1f2d3d;--muted:#6b7c8f;--line:#dbe5ee;--accent:#1aa3e8;--ok:#2fb36d;--bad:#e5534b;--warn:#ff8a3d}
+*{box-sizing:border-box}
+body{margin:0;font-family:Nunito,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+header h1{font-size:24px;margin:0;font-weight:800}
+header h1 span{color:var(--accent)}
+header p{margin:4px 0 0;color:var(--muted);font-size:14px;max-width:760px}
+.tabs{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}
+.tab{border:2px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer;color:var(--ink)}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start}
+.grid2{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+@media(max-width:860px){.grid,.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 1px 2px rgba(20,40,60,.06),0 6px 20px rgba(20,40,60,.05)}
+.side{display:flex;flex-direction:column;gap:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;font-weight:800}
+.stage svg{width:100%;height:auto;display:block;border-radius:14px;background:linear-gradient(#f9fcff,#e2eef8)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:10px;font-weight:600}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.legend i.rect{border-radius:2px;width:14px}
+.readouts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ro{background:var(--bg);border-radius:12px;padding:10px 12px}
+.ro .k{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.ro .v{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+.ro .v.bad{color:var(--bad)}
+.bar{height:8px;background:#dbe5ee;border-radius:99px;overflow:hidden;margin-top:6px}
+.bar>div{height:100%;background:var(--warn);width:0;border-radius:99px;transition:width .08s}
+.leds{display:flex;gap:7px;margin-bottom:12px}
+.led{width:20px;height:20px;border-radius:50%;background:#dfe7ef;transition:background .1s,box-shadow .1s}
+.led.on{background:#39d27a;box-shadow:0 0 10px #39d27a}
+.devs{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:5px 11px;border-radius:999px;background:var(--bg);font-size:13px;font-weight:700;color:var(--muted)}
+.pill.on{background:#e6f6ff;color:#0f7fb8}
+.pill.motor.on{background:#e9f9ef;color:#1f8a52;animation:buzz .09s linear infinite}
+.pill.buzz.on{background:#fff2e6;color:#c9601a}
+@keyframes buzz{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+.checks{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.checks li{display:flex;justify-content:space-between;gap:8px;font-size:14px;padding:7px 10px;border-radius:10px;background:var(--bg)}
+.checks li b{font-variant-numeric:tabular-nums}
+.checks li.na b{color:var(--muted)} .checks li.ok b{color:var(--ok)} .checks li.bad b{color:var(--bad)}
+.verdict{margin-top:10px;font-weight:800;font-size:15px}
+.verdict.ok{color:var(--ok)} .verdict.bad{color:var(--bad)}
+.counter{font-size:13px;color:var(--muted);font-weight:700;margin-top:4px}
+canvas{width:100%;height:120px;display:block;background:var(--bg);border-radius:12px}
+.chartlbl{font-size:12px;color:var(--muted);font-weight:700;margin:10px 0 4px;display:flex;justify-content:space-between}
+.chartlbl:first-of-type{margin-top:0}
+.ctrl{display:flex;flex-direction:column;gap:12px}
+.ctrl label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700}
+.ctrl label span{display:flex;justify-content:space-between}
+.ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{font:inherit;padding:7px 10px;border-radius:10px;border:2px solid var(--line);background:#fff;color:var(--ink);color-scheme:light}
+select option{background:#fff;color:var(--ink)}
+.seg{display:flex;background:var(--bg);border-radius:999px;padding:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:7px 8px;font:inherit;font-weight:700;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:0;background:var(--accent);color:#fff;border-radius:10px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer}
+.btn.ghost{background:var(--bg);color:var(--ink)}
+.chk{flex-direction:row!important;align-items:center;gap:6px!important;font-weight:600!important}
+.info{margin-top:16px}
+.info dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0;font-size:14px}
+.info dt{font-weight:800;color:var(--muted)}
+.info dd{margin:0}
+.scorebox{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding:14px 20px;border-radius:14px;background:var(--bg);border:2px solid var(--line)}
+.sc-k{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.sc-n{font-size:56px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.sc-right{display:flex;align-items:center;gap:12px;font-size:30px;font-weight:800;color:var(--muted)}
+.sc-icon{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:32px;background:#dfe7ef;color:#fff}
+.sc-right.ok{color:var(--ok)} .sc-right.ok .sc-icon{background:var(--ok)}
+.sc-right.bad{color:var(--bad)} .sc-right.bad .sc-icon{background:var(--bad)}
+.sc-right.pop .sc-icon{animation:pop .35s ease}
+@keyframes pop{0%{transform:scale(.6)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+.conn{margin-top:16px;display:flex;flex-direction:column;gap:12px}
+.connrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.badge{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:800;background:#e3eaf1;color:var(--muted)}
+.badge.on{background:#e3f7ea;color:#1f8a52}.badge.wait{background:#fff4e0;color:#b9770e}.badge.bad{background:#fde8e7;color:#c0392b}
+.fld{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}
+.fld input{font:inherit;font-weight:600;color:var(--ink);padding:7px 10px;border-radius:10px;border:2px solid var(--line);background:#fff;min-width:230px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.hint{font-size:12px;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);margin:14px 2px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>MyoPlayBand</span> · Panel en vivo</h1>
+    <p>El monito sigue los datos de la banda por MQTT (o se anima solo en modo demostración). Cada repetición se evalúa con el ángulo (MPU6050), la velocidad angular (giroscopio) y la activación muscular (EMG).</p>
+  </header>
+
+  <div class="card conn">
+    <div class="connrow">
+      <div class="seg" id="srcSeg" style="min-width:330px">
+        <button data-s="demo" class="on">Demostración</button>
+        <button data-s="live">En vivo (MQTT)</button>
+      </div>
+      <span class="badge" id="bBroker">Broker: desconectado</span>
+      <span class="badge" id="bPlaca">Placa: —</span>
+      <span class="badge" id="bDatos">Datos: —</span>
+    </div>
+    <div id="liveRows" style="display:none;flex-direction:column;gap:12px">
+      <div class="connrow">
+        <label class="fld">Broker <input id="iBroker"></label>
+        <label class="fld">Topic base <input id="iTopic"></label>
+        <button class="btn" id="bConnect">Conectar</button>
+      </div>
+      <div class="connrow">
+        <button class="btn ghost" id="bCal" disabled>Calibrar placa</button>
+        <button class="btn ghost" id="bReset" disabled>Reset contracciones</button>
+        <span class="pill" id="pContr">Contracciones (placa): —</span>
+        <label class="chk" style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700"><input type="checkbox" id="simPlaca" disabled> Simular placa (publica datos de prueba)</label>
+      </div>
+      <div class="hint">El monito usa el ángulo que manda la placa en <b>/live</b> (o <b>/estado</b>). 0° = posición de reposo guardada al calibrar. “Simular placa” publica datos falsos en el mismo topic: no lo uses con la placa real conectada.</div>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="grid">
+    <div class="card stage">
+      <svg id="svg" viewBox="0 0 520 460" aria-label="Monito realizando el ejercicio"></svg>
+      <div class="legend">
+        <span><i style="background:#1aa3e8"></i>Electrodo EMG</span>
+        <span><i style="background:#8a9bb0"></i>Referencia</span>
+        <span><i class="rect" style="background:#2b3a4a"></i>IMU (MPU6050)</span>
+        <span><i class="rect" style="background:#ff8a3d"></i>Músculo activo</span>
+      </div>
+      <div class="scorebox">
+        <div><div class="sc-k">Repeticiones buenas</div><div class="sc-n" id="bigCount">0</div></div>
+        <div class="sc-right" id="bigStatus"><span class="sc-icon">–</span><span id="bigTxt">Esperando…</span></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Lecturas</h2>
+        <div class="readouts">
+          <div class="ro"><div class="k">Ángulo</div><div class="v" id="rAng">0°</div></div>
+          <div class="ro"><div class="k">Velocidad</div><div class="v" id="rVel">0°/s</div></div>
+          <div class="ro"><div class="k">Fase</div><div class="v" id="rPhase" style="font-size:20px">Reposo</div></div>
+          <div class="ro"><div class="k">EMG (% del umbral)</div><div class="v" id="rEmg">0%</div><div class="bar"><div id="emgBar"></div></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Banda virtual</h2>
+        <div class="leds" id="leds"></div>
+        <div class="devs">
+          <span class="pill" id="pLed">LED</span>
+          <span class="pill motor" id="pMotor">Motor vibrador</span>
+          <span class="pill buzz" id="pBuzz">Buzzer (EMG)</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Última repetición</h2>
+        <ul class="checks" id="checks"></ul>
+        <div class="verdict" id="verdict">Esperando la primera repetición…</div>
+        <div class="counter" id="counter">0 correctas</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="chartlbl"><span>Ángulo (°) · últimos 8 s</span><span style="color:#ff8a3d">- - objetivo</span></div>
+      <canvas id="cAng"></canvas>
+      <div class="chartlbl"><span>Velocidad angular (°/s)</span><span id="bandLbl"></span></div>
+      <canvas id="cVel"></canvas>
+      <div class="chartlbl"><span>EMG (envolvente)</span><span><span style="color:#e5534b">- - umbral ON</span> · <span style="color:#2fb36d">- - umbral OFF</span></span></div>
+      <canvas id="cEmg"></canvas>
+    </div>
+    <div class="card ctrl">
+      <h2 style="margin:0">Parámetros</h2>
+      <div class="hint">Modo y ángulo objetivo se usan para evaluar. Tiempos y errores aplican a la demostración y a “Simular placa”.</div>
+      <div class="seg" id="mode">
+        <button data-m="lento" class="on">Lento (controlado)</button>
+        <button data-m="rapido">Rápido (explosivo)</button>
+      </div>
+      <label><span>Ángulo objetivo <b id="vTarget"></b></span><input type="range" id="sTarget" step="1"></label>
+      <label><span>Tiempo de subida <b id="vUp"></b></span><input type="range" id="sUp" min="0.3" max="5" step="0.1"></label>
+      <label><span>Tiempo de mantención <b id="vHold"></b></span><input type="range" id="sHold" min="0" max="4" step="0.1"></label>
+      <label><span>Tiempo de bajada <b id="vDown"></b></span><input type="range" id="sDown" min="0.3" max="5" step="0.1"></label>
+      <label><span>Simular error</span>
+        <select id="err">
+          <option value="ninguno">Ninguno (ejercicio bien hecho)</option>
+          <option value="rango">Rango incompleto</option>
+          <option value="vel">Velocidad de subida equivocada</option>
+          <option value="caida">Bajada sin control (el brazo cae)</option>
+          <option value="sinhold">No mantiene arriba</option>
+          <option value="sinact">Mueve sin activar el músculo (compensa)</option>
+          <option value="norelaja">No relaja al terminar (espasticidad)</option>
+        </select>
+      </label>
+      <div class="btns">
+        <button class="btn" id="play">Pausa</button>
+        <button class="btn ghost" id="resetC">Reiniciar contador</button>
+        <label class="chk"><input type="checkbox" id="showS" checked> Mostrar sensores</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card info" id="info"></div>
+  <p class="foot">Valores de referencia para el prototipo (no clínicos). Los rangos, tiempos y umbrales reales los define el kinesiólogo para cada paciente. En modo demostración el EMG es simulado; en vivo se muestra relativo al umbral de activación calibrado en la placa.</p>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('svg');
+const OUT='#c6d3df', FAR='#e7eef5', FAROUT='#cfdae5';
+
+const EX={
+  codo:{name:'Flexo-extensión de codo',start:0,target:110,min:40,max:140,t:{up:3,hold:1,down:3,rest:1.5},
+    info:{'Músculo':'Bíceps braquial (o tríceps si se entrena la extensión)','Electrodos':'Vientre del bíceps, a ~1/3 desde el pliegue del codo hacia el hombro; referencia sobre el olécranon','IMU':'Antebrazo','Ángulo':'0° (codo estirado) → ~110°','Ojo con':'Que el brazo “caiga” en la bajada o que el músculo no se relaje al terminar'}},
+  muneca:{name:'Extensión de muñeca',start:-40,target:20,min:-10,max:45,t:{up:2,hold:2,down:2,rest:1.5},
+    info:{'Músculo':'Extensor radial del carpo','Electrodos':'Cara dorsal del antebrazo, 2–3 dedos bajo el epicóndilo lateral; referencia en el codo','IMU':'Dorso de la mano (el antebrazo queda quieto sobre la mesa)','Ángulo':'−40° (muñeca caída) → +20° (extensión). En vivo: calibrar con la muñeca caída','Ojo con':'Levantar el antebrazo para compensar'}},
+  hombro:{name:'Flexión de hombro',start:0,target:90,min:30,max:150,t:{up:3,hold:1,down:3,rest:1.5},
+    info:{'Músculo':'Deltoides anterior','Electrodos':'Un dedo por delante y abajo del acromion; referencia sobre una zona ósea (por ejemplo la vértebra C7, en la base del cuello)','IMU':'Brazo','Ángulo':'0° (brazo colgando) → 90°','Ojo con':'Doblar el codo, subir el hombro hacia la oreja o inclinar el tronco'}}
+};
+const FAST={up:0.6,hold:0.3,down:2.5,rest:1.2};
+const BANDS={lento:{up:80,down:80},rapido:{up:150,down:120}};
+const REP_ON=8, REP_OFF=4, HOLD_VEL=8, TOL=5, RELAX_MAX=2.0, DEMO_ON=100, DEMO_OFF=64;
+
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);(parent||svg).appendChild(e);return e;}
+function limb(pts,w,fill,out){const p=pts.map(q=>q.join(',')).join(' ');
+  el('polyline',{points:p,fill:'none',stroke:out||OUT,'stroke-width':w+5,'stroke-linecap':'round','stroke-linejoin':'round'});
+  el('polyline',{points:p,fill:'none',stroke:fill||'#fff','stroke-width':w,'stroke-linecap':'round','stroke-linejoin':'round'});}
+
+/* ---------- escena estática ---------- */
+el('defs',{}).innerHTML='<radialGradient id="skin" cx=".38" cy=".32" r=".85"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9f0f7"/></radialGradient>';
+el('ellipse',{cx:250,cy:445,rx:160,ry:10,fill:'#cbd9e6',opacity:.6});
+el('line',{x1:10,y1:442,x2:510,y2:442,stroke:'#cbd8e4','stroke-width':2});
+const tableLeg=el('line',{x1:297,y1:284,x2:297,y2:440,stroke:'#b9c9d8','stroke-width':8,'stroke-linecap':'round'});
+const chair=el('g',{stroke:'#a9bccf','stroke-linecap':'round'});
+el('line',{x1:146,y1:326,x2:134,y2:196,'stroke-width':10},chair);
+el('line',{x1:146,y1:327,x2:262,y2:327,'stroke-width':10},chair);
+el('line',{x1:160,y1:332,x2:160,y2:440,'stroke-width':8},chair);
+el('line',{x1:250,y1:332,x2:250,y2:440,'stroke-width':8},chair);
+limb([[200,298],[302,302],[298,424]],34,FAR,FAROUT);
+limb([[300,428],[332,430]],16,FAR,FAROUT);
+limb([[194,184],[186,262],[252,284]],22,FAR,FAROUT);
+limb([[205,300],[314,305]],42);
+limb([[314,305],[318,424]],32);
+limb([[320,428],[356,430]],18);
+limb([[200,178],[205,288]],58);
+limb([[198,140],[200,166]],20);
+el('circle',{cx:196,cy:110,r:34,fill:'url(#skin)',stroke:OUT,'stroke-width':4});
+const tableTop=el('rect',{x:233,y:274,width:72,height:9,rx:4,fill:'#c9d6e3'});
+
+/* ---------- elementos dinámicos ---------- */
+const W_ARM=[26,22,18];
+const armO=W_ARM.map(w=>el('line',{stroke:OUT,'stroke-width':w+5,'stroke-linecap':'round'}));
+const armF=W_ARM.map(w=>el('line',{stroke:'#fff','stroke-width':w,'stroke-linecap':'round'}));
+const muscle=el('line',{stroke:'#ff8a3d','stroke-width':11,'stroke-linecap':'round',opacity:0});
+const refLine=el('line',{stroke:'#1aa3e8','stroke-width':2,'stroke-dasharray':'4 4',opacity:.7});
+const arc=el('path',{fill:'rgba(26,163,232,.18)',stroke:'#1aa3e8','stroke-width':2});
+const lbl=el('text',{'font-size':16,'font-weight':800,fill:'#1aa3e8','text-anchor':'middle','font-family':'Nunito,sans-serif'});
+const sens=el('g',{});
+const e1=el('circle',{r:5,fill:'#1aa3e8',stroke:'#fff','stroke-width':2},sens);
+const e2=el('circle',{r:5,fill:'#1aa3e8',stroke:'#fff','stroke-width':2},sens);
+const er=el('circle',{r:5,fill:'#8a9bb0',stroke:'#fff','stroke-width':2},sens);
+const imu=el('g',{},sens);
+el('rect',{x:-13,y:-7,width:26,height:14,rx:3,fill:'#2b3a4a'},imu);
+el('text',{y:2.6,'font-size':7.5,'font-weight':800,fill:'#fff','text-anchor':'middle','font-family':'Nunito,sans-serif'},imu).textContent='IMU';
+const noData=el('text',{x:260,y:40,'font-size':15,'font-weight':800,fill:'#c0392b','text-anchor':'middle','font-family':'Nunito,sans-serif'});
+
+/* ---------- geometría ---------- */
+const S=[206,182],U=82,F=76;
+const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+const add=(a,d,s)=>[a[0]+d[0]*s,a[1]+d[1]*s];
+function along(a,b,t,off){const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;return[a[0]+dx*t+uy*off,a[1]+dy*t-ux*off];}
+const POSE={
+  codo(a){const r=rad(a),E=[S[0],S[1]+U],d=[Math.sin(r),Math.cos(r)],W=add(E,d,F),H=add(W,d,26);
+    return{segs:[[S,E],[E,W],[W,H]],joint:E,a0:Math.PI/2,a1:Math.atan2(d[1],d[0]),
+      mus:[along(S,E,.32,7),along(S,E,.78,7)],el:[along(S,E,.45,12),along(S,E,.65,12)],ref:along(S,E,.95,-13),
+      imu:along(E,W,.5,0),imuAng:deg(Math.atan2(d[1],d[0]))};},
+  muneca(a){const r14=rad(14),d1=[Math.sin(r14),Math.cos(r14)],E=add(S,d1,U),W=[E[0]+F,E[1]],r=rad(a),d=[Math.cos(r),-Math.sin(r)],H=add(W,d,44);
+    return{segs:[[S,E],[E,W],[W,H]],joint:W,a0:0,a1:Math.atan2(d[1],d[0]),
+      mus:[along(E,W,.1,7),along(E,W,.5,7)],el:[along(E,W,.22,11),along(E,W,.4,11)],ref:along(S,E,.92,-12),
+      imu:along(W,H,.55,9),imuAng:deg(Math.atan2(d[1],d[0]))};},
+  hombro(a){const r=rad(a),d=[Math.sin(r),Math.cos(r)],E=add(S,d,U),W=add(E,d,F),H=add(W,d,26);
+    return{segs:[[S,E],[E,W],[W,H]],joint:S,a0:Math.PI/2,a1:Math.atan2(d[1],d[0]),
+      mus:[along(S,E,.05,8),along(S,E,.35,8)],el:[along(S,E,.15,13),along(S,E,.3,13)],ref:[184,150],
+      imu:along(S,E,.6,0),imuAng:deg(Math.atan2(d[1],d[0]))};}
+};
+function setLine(l,a,b){l.setAttribute('x1',a[0]);l.setAttribute('y1',a[1]);l.setAttribute('x2',b[0]);l.setAttribute('y2',b[1]);}
+function setC(c,p){c.setAttribute('cx',p[0]);c.setAttribute('cy',p[1]);}
+
+/* ---------- estado ---------- */
+const $=id=>document.getElementById(id);
+let exKey='codo',mode='lento',err='ninguno',P={},src='demo',running=true,last=null,simT=0,hist=[];
+let stats={ok:0,total:0};
+const sim={phase:'reposo',phaseT:0,angle:0,prev:0,vel:0,act:0,emg:0,activo:false,contr:0,calUntil:0};
+const disp={angle:0,vel:0,act:0,emg:0,on:0,off:0,activo:false,calibrando:false};
+const ev={inRep:false,rep:null,pending:null};
+const live={angle:null,vel:0,emg:0,activo:false,umbralOn:0,umbralOff:0,contr:null,calibrando:false,lastT:0,lastLiveT:0,times:[],online:null};
+const sl={target:$('sTarget'),up:$('sUp'),hold:$('sHold'),down:$('sDown')};
+
+function syncSliders(){const e=EX[exKey];sl.target.min=e.min;sl.target.max=e.max;for(const k in sl)sl[k].value=P[k];labels();}
+function labels(){$('vTarget').textContent=P.target+'°';$('vUp').textContent=(+P.up).toFixed(1)+' s';
+  $('vHold').textContent=(+P.hold).toFixed(1)+' s';$('vDown').textContent=(+P.down).toFixed(1)+' s';
+  const b=BANDS[mode];$('bandLbl').textContent=mode==='lento'?`banda OK: |v| ≤ ${b.up}°/s`:`subida ≥ ${b.up}°/s · bajada ≤ ${b.down}°/s`;}
+function applyMode(){const e=EX[exKey],t=mode==='rapido'?FAST:e.t;P.up=t.up;P.hold=t.hold;P.down=t.down;P.rest=t.rest;}
+function resetRun(){const e=EX[exKey];Object.assign(sim,{phase:'reposo',phaseT:0,angle:e.start,prev:e.start,vel:0,act:0});
+  disp.angle=e.start;disp.vel=0;disp.act=0;disp.emg=0;ev.inRep=false;ev.rep=null;ev.pending=null;hist=[];stats={ok:0,total:0};resetEval();}
+function setEx(k){exKey=k;const e=EX[k];P={target:e.target};applyMode();syncSliders();resetRun();
+  tableTop.style.display=tableLeg.style.display=k==='muneca'?'':'none';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+  $('info').innerHTML='<h2>'+e.name+'</h2><dl>'+Object.entries(e.info).map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join('')+'</dl>';}
+function resetEval(){$('checks').innerHTML='';$('verdict').className='verdict';$('verdict').textContent='Esperando la primera repetición…';
+  $('counter').textContent=`${stats.ok} correctas`;
+  $('bigCount').textContent=stats.ok;$('bigStatus').className='sc-right';$('bigStatus').querySelector('.sc-icon').textContent='–';$('bigTxt').textContent='Esperando…';}
+
+/* ---------- simulación (demostración y "Simular placa") ---------- */
+function eff(){let up=+P.up,hold=+P.hold,down=+P.down,amp=1;
+  if(err==='rango')amp=.6;
+  if(err==='vel')up=mode==='lento'?Math.min(up,.45):2.5;
+  if(err==='caida')down=.35;
+  if(err==='sinhold')hold=0;
+  return{up,hold,down,amp,rest:+P.rest};}
+const mj=t=>t*t*t*(10-15*t+6*t*t);
+const ORDER={reposo:'subida',subida:'mantener',mantener:'bajada',bajada:'reposo'};
+function dur(ph,E){return ph==='reposo'?E.rest:ph==='subida'?E.up:ph==='mantener'?E.hold:E.down;}
+function simStep(dt){
+  sim.phaseT+=dt;const E=eff(),e=EX[exKey],peak=e.start+(P.target-e.start)*E.amp;let g=0;
+  while(sim.phaseT>=dur(sim.phase,E)&&g++<5){sim.phaseT-=dur(sim.phase,E);sim.phase=ORDER[sim.phase];}
+  const d=dur(sim.phase,E),tau=d>0?Math.min(sim.phaseT/d,1):1,ph=sim.phase;
+  sim.angle=ph==='subida'?e.start+(peak-e.start)*mj(tau):ph==='mantener'?peak:ph==='bajada'?peak-(peak-e.start)*mj(tau):e.start;
+  const raw=(sim.angle-sim.prev)/dt;sim.vel+=(raw-sim.vel)*.35;sim.prev=sim.angle;
+  let tgt=ph==='subida'?(mode==='rapido'?.85:.55):ph==='mantener'?.45:ph==='bajada'?.3:.04;
+  if(err==='sinact')tgt=ph==='reposo'?.04:.15;                 // se mueve sin activar el músculo
+  if(err==='norelaja'&&(ph==='bajada'||ph==='reposo'))tgt=.5;    // el músculo queda contraído
+  sim.act+=(tgt-sim.act)*Math.min(1,dt*6);
+  sim.n=(sim.n||0)+((Math.random()-.5)-(sim.n||0))*Math.min(1,dt*4);   // ruido suave, no salta cada cuadro
+  sim.emg=Math.max(0,sim.act*200*(1+sim.n*.1));
+  if(!sim.activo&&sim.emg>DEMO_ON){sim.activo=true;sim.contr++;}else if(sim.activo&&sim.emg<DEMO_OFF)sim.activo=false;
+}
+
+/* ---------- evaluación de repeticiones (igual para demo y en vivo) ---------- */
+function evalStep(dt){
+  const e=EX[exKey],rom=disp.angle-e.start;
+  // repetición terminada: esperar a que el músculo se relaje (máx RELAX_MAX s)
+  if(ev.pending){const pd=ev.pending;pd.t+=dt;
+    if(disp.off<=0){evaluate(pd.rep,null,0);ev.pending=null;}
+    else if(disp.emg<disp.off){evaluate(pd.rep,true,pd.t);ev.pending=null;}
+    else if(pd.t>=RELAX_MAX||(!ev.inRep&&rom>REP_ON)){evaluate(pd.rep,false,pd.t);ev.pending=null;}}
+  if(!ev.inRep&&rom>REP_ON){ev.inRep=true;ev.rep={max:-999,vUp:0,vDown:0,hold:0,emgMax:0,on:disp.on};}
+  if(ev.inRep){const r=ev.rep;r.max=Math.max(r.max,disp.angle);r.vUp=Math.max(r.vUp,disp.vel);r.vDown=Math.max(r.vDown,-disp.vel);
+    r.emgMax=Math.max(r.emgMax,disp.emg);if(disp.on>0)r.on=disp.on;
+    if(disp.angle>=P.target-TOL&&Math.abs(disp.vel)<HOLD_VEL)r.hold+=dt;
+    if(rom<REP_OFF){ev.inRep=false;ev.pending={rep:r,t:0};ev.rep=null;
+      if(disp.off>0&&disp.emg<disp.off){evaluate(r,true,0);ev.pending=null;}}}
+}
+function phaseLabel(){const e=EX[exKey],rom=disp.angle-e.start;
+  if(disp.calibrando)return 'Calibrando';
+  if(rom<REP_ON&&!ev.inRep)return 'Reposo';
+  if(disp.vel>6)return 'Subiendo';if(disp.vel<-6)return 'Bajando';
+  return disp.angle>=P.target-TOL?'Manteniendo':'Detenido';}
+function evaluate(r,relajo,tRelax){const b=BANDS[mode],holdReq=+P.hold,on=r.on||0;
+  const c=[
+    ['Rango alcanzado',r.max>=P.target-TOL,`${Math.round(r.max)}° / ${P.target}°`,'no llegó al ángulo'],
+    [mode==='lento'?'Subida controlada':'Subida explosiva',mode==='lento'?r.vUp<=b.up:r.vUp>=b.up,`${Math.round(r.vUp)}°/s (${mode==='lento'?'≤':'≥'}${b.up})`,mode==='lento'?'subida muy rápida':'subida muy lenta'],
+    ['Bajada controlada',r.vDown<=b.down,`${Math.round(r.vDown)}°/s (≤${b.down})`,'bajada sin control'],
+    ['Mantención arriba',r.hold>=holdReq*0.9,`${r.hold.toFixed(1)} s (≥${holdReq.toFixed(1)})`,'no mantuvo arriba'],
+    ['Activó el músculo',on>0?r.emgMax>=on:null,on>0?`${Math.round(r.emgMax/on*100)}% del umbral (≥100%)`:'sin datos de umbral','no activó el músculo'],
+    ['Relajó al terminar',relajo,relajo===null?'sin datos de umbral':relajo?`${tRelax.toFixed(1)} s (≤${RELAX_MAX.toFixed(1)})`:`> ${tRelax.toFixed(1)} s (≤${RELAX_MAX.toFixed(1)})`,'no relajó el músculo']];
+  const ok=c.every(x=>x[1]!==false);stats.total++;if(ok)stats.ok++;
+  $('checks').innerHTML=c.map(([n,g,v])=>`<li class="${g===null?'na':g?'ok':'bad'}"><span>${g===null?'–':g?'✓':'✗'} ${n}</span><b>${v}</b></li>`).join('');
+  const v=$('verdict');v.className='verdict '+(ok?'ok':'bad');
+  v.textContent=ok?'¡Repetición correcta!':'Repetición incorrecta: '+c.filter(x=>x[1]===false).map(x=>x[3]).join(', ');
+  $('counter').textContent=`${stats.ok} correctas`;
+  $('bigCount').textContent=stats.ok;const bs=$('bigStatus');bs.className='sc-right '+(ok?'ok':'bad');void bs.offsetWidth;bs.classList.add('pop');
+  bs.querySelector('.sc-icon').textContent=ok?'✓':'✗';$('bigTxt').textContent=ok?'Bien':'Mal';}
+
+/* ---------- MQTT ---------- */
+let client=null,connected=false;
+const store={get(k,d){try{return localStorage.getItem(k)||d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+$('iBroker').value=store.get('mpb_broker','wss://broker.emqx.io:8084/mqtt');
+$('iTopic').value=store.get('mpb_topic','myoplayband/grupo8_basti_jt');
+const T=()=>$('iTopic').value.trim().replace(/\/+$/,'');
+function badge(id,txt,cls){const b=$(id);b.textContent=txt;b.className='badge'+(cls?' '+cls:'');}
+function setConnUI(){['bCal','bReset','simPlaca'].forEach(id=>$(id).disabled=!connected);
+  $('bConnect').textContent=client?'Desconectar':'Conectar';
+  if(!connected){$('simPlaca').checked=false;}}
+function connect(){
+  if(typeof mqtt==='undefined'){badge('bBroker','Broker: no cargó MQTT.js (¿sin internet?)','bad');return;}
+  store.set('mpb_broker',$('iBroker').value.trim());store.set('mpb_topic',T());
+  badge('bBroker','Broker: conectando…','wait');
+  client=mqtt.connect($('iBroker').value.trim(),{clientId:'myoplayband-web-'+Math.random().toString(16).slice(2,10),clean:true,connectTimeout:6000,reconnectPeriod:3000});
+  client.on('connect',()=>{connected=true;badge('bBroker','Broker: conectado','on');client.subscribe(T()+'/#');setConnUI();});
+  client.on('reconnect',()=>badge('bBroker','Broker: reconectando…','wait'));
+  client.on('close',()=>{connected=false;if(client)badge('bBroker','Broker: desconectado','bad');setConnUI();});
+  client.on('error',e=>badge('bBroker','Broker: error ('+(e&&e.message||'')+')','bad'));
+  client.on('message',onMessage);
+  setConnUI();
+}
+function disconnect(){if(client){const c=client;client=null;connected=false;c.end(true);}
+  badge('bBroker','Broker: desconectado','');badge('bPlaca','Placa: —','');setConnUI();}
+function onMessage(topic,payload){
+  const msg=payload.toString(),sub=topic.slice(T().length+1),now=performance.now();
+  if(sub==='online'){live.online=msg==='online';badge('bPlaca','Placa: '+(live.online?'online':'offline'),live.online?'on':'bad');return;}
+  if(sub==='cmd'){if(simOn()){if(msg==='reset')sim.contr=0;if(msg==='calibrar'){sim.calUntil=now+3500;}}return;}
+  if(sub!=='live'&&sub!=='estado')return;
+  let d;try{d=JSON.parse(msg);}catch(e){return;}
+  const ang=d.angulo!==undefined?d.angulo:d.pitch;
+  if(sub==='live'){live.lastLiveT=now;live.times.push(now);}
+  if(sub==='live'||now-live.lastLiveT>1500){
+    if(typeof ang==='number')live.angle=ang;
+    if(typeof d.vel==='number')live.vel=d.vel;
+    if(typeof d.emg==='number')live.emg=d.emg;
+    const a=d.activo!==undefined?d.activo:d.musculoActivo;if(typeof a==='boolean')live.activo=a;}
+  if(sub==='estado'){if(typeof d.umbralOn==='number')live.umbralOn=d.umbralOn;if(typeof d.umbralOff==='number')live.umbralOff=d.umbralOff;
+    if(typeof d.contracciones==='number'){live.contr=d.contracciones;$('pContr').textContent='Contracciones (placa): '+d.contracciones;}
+    live.calibrando=!!d.calibrando;
+    if(live.online===null)badge('bPlaca','Placa: enviando datos','on');}
+  live.lastT=now;
+}
+const simOn=()=>connected&&$('simPlaca').checked;
+let tPubLive=0,tPubEstado=0;
+function publishSim(now){const e=EX[exKey],cal=now<sim.calUntil;
+  const ang=Math.max(0,sim.angle-e.start),emg=cal?20:sim.emg,act=!cal&&sim.activo;
+  if(now-tPubLive>=100){tPubLive=now;client.publish(T()+'/live',JSON.stringify({angulo:+ang.toFixed(1),vel:+sim.vel.toFixed(1),emg:+emg.toFixed(1),activo:act}));}
+  if(now-tPubEstado>=1000){tPubEstado=now;client.publish(T()+'/estado',JSON.stringify({angulo:+ang.toFixed(1),vel:+sim.vel.toFixed(1),umbralAngulo:45,anguloOK:ang>=45,
+    emg:+emg.toFixed(1),umbralOn:DEMO_ON,umbralOff:DEMO_OFF,musculoActivo:act,calibrando:cal,contracciones:sim.contr}));}}
+$('bConnect').onclick=()=>client?disconnect():connect();
+$('bCal').onclick=()=>{if(connected)client.publish(T()+'/cmd','calibrar');};
+$('bReset').onclick=()=>{if(connected)client.publish(T()+'/cmd','reset');};
+$('simPlaca').onchange=e=>{if(e.target.checked&&connected){sim.contr=0;client.publish(T()+'/online','online');}};
+
+/* ---------- dibujo ---------- */
+let emgShown=0,tEmgTxt=0;
+const leds=$('leds');for(let i=0;i<8;i++){const d=document.createElement('div');d.className='led';leds.appendChild(d);}
+function draw(){
+  const e=EX[exKey],p=POSE[exKey](disp.angle);
+  p.segs.forEach((s,i)=>{setLine(armO[i],s[0],s[1]);setLine(armF[i],s[0],s[1]);});
+  armO[2].setAttribute('stroke-width',exKey==='muneca'?23:23);
+  setLine(muscle,p.mus[0],p.mus[1]);muscle.setAttribute('opacity',Math.min(.95,disp.act*1.3));
+  const c=p.joint,R=30,a0=p.a0,a1=p.a1;
+  setLine(refLine,c,[c[0]+52*Math.cos(a0),c[1]+52*Math.sin(a0)]);
+  const p0=[c[0]+R*Math.cos(a0),c[1]+R*Math.sin(a0)],p1=[c[0]+R*Math.cos(a1),c[1]+R*Math.sin(a1)];
+  arc.setAttribute('d',`M${c[0]},${c[1]} L${p0[0]},${p0[1]} A${R},${R} 0 ${Math.abs(a1-a0)>Math.PI?1:0} ${a1>a0?1:0} ${p1[0]},${p1[1]} Z`);
+  const mid=(a0+a1)/2;lbl.setAttribute('x',c[0]+50*Math.cos(mid)+(exKey==='codo'?8:0));lbl.setAttribute('y',c[1]+50*Math.sin(mid)+5);
+  lbl.textContent=Math.round(disp.angle)+'°';
+  setC(e1,p.el[0]);setC(e2,p.el[1]);setC(er,p.ref);
+  imu.setAttribute('transform',`translate(${p.imu[0]} ${p.imu[1]}) rotate(${p.imuAng})`);
+  const now=performance.now();
+  noData.textContent=src==='live'?(!connected?'Conéctate al broker para ver los datos':(live.lastT===0||now-live.lastT>3000)?'Esperando datos de la placa…':''):'';
+  $('rAng').textContent=Math.round(disp.angle)+'°';
+  const b=BANDS[mode],rv=$('rVel');rv.textContent=Math.round(disp.vel)+'°/s';
+  rv.classList.toggle('bad',(disp.vel<-b.down)||(mode==='lento'&&disp.vel>b.up));
+  $('rPhase').textContent=phaseLabel();
+  emgShown+=(disp.emg-emgShown)*.08;                                   // promedio para la lectura
+  if(now-tEmgTxt>250){tEmgTxt=now;$('rEmg').textContent=disp.calibrando?'CAL':disp.on>0?Math.round(emgShown/disp.on*100)+'%':'—';}$('emgBar').style.width=Math.round(disp.act*100)+'%';
+  const frac=Math.max(0,Math.min(1,(disp.angle-e.start)/(P.target-e.start))),n=Math.round(frac*8),reached=disp.angle>=P.target-TOL;
+  [...leds.children].forEach((d,i)=>d.classList.toggle('on',i<n));
+  $('pLed').classList.toggle('on',reached);$('pMotor').classList.toggle('on',reached);$('pBuzz').classList.toggle('on',disp.activo);
+  // tasa de datos
+  live.times=live.times.filter(t=>now-t<2000);
+  if(src==='live'){const hz=live.times.length/2;
+    if(!connected)badge('bDatos','Datos: —','');
+    else if(live.lastT===0||now-live.lastT>3000)badge('bDatos','Datos: sin datos','bad');
+    else badge('bDatos',hz>0?`Datos: /live ${hz.toFixed(0)} Hz`:'Datos: solo /estado (1 Hz)',hz>=5?'on':'wait');}
+  chart($('cAng'),'a',e.start-10,e.max+10,[[P.target,'#ff8a3d'],[e.start,'#a9bccf']]);
+  const lim=Math.min(700,Math.max(160,...hist.map(h=>Math.abs(h.v)))*1.1);
+  chart($('cVel'),'v',-lim,lim,[[b.up,'#2fb36d'],[-b.down,'#2fb36d'],[0,'#a9bccf']]);
+  const elim=Math.max(10,disp.on*2.2,...hist.map(h=>h.e*1.1));
+  chart($('cEmg'),'e',0,elim,disp.on>0?[[disp.on,'#e5534b'],[disp.off,'#2fb36d']]:[]);
+}
+function chart(cv,key,lo,hi,lines){
+  const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1,w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);const W=r.width,H=r.height;x.clearRect(0,0,W,H);
+  const Y=v=>H-6-(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*(H-12),X=t=>(t-(simT-8))/8*W;
+  x.font='600 10px Nunito,sans-serif';
+  lines.forEach(([v,col])=>{x.strokeStyle=col;x.setLineDash([5,4]);x.lineWidth=1.5;x.beginPath();x.moveTo(0,Y(v));x.lineTo(W,Y(v));x.stroke();
+    x.fillStyle=col;x.fillText(Math.round(v),4,Y(v)-3);});
+  x.setLineDash([]);x.strokeStyle=key==='a'?'#1aa3e8':key==='v'?'#7a5cff':'#ff8a3d';x.lineWidth=2.2;x.beginPath();
+  hist.forEach((p,i)=>{const px=X(p.t),py=Y(p[key]);i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();
+}
+
+/* ---------- loop ---------- */
+function step(dt,now){
+  simT+=dt;const e=EX[exKey];
+  if(src==='demo'){
+    simStep(dt);disp.angle=sim.angle;disp.vel=sim.vel;disp.emg=sim.emg;disp.on=DEMO_ON;disp.off=DEMO_OFF;disp.activo=sim.activo;disp.calibrando=false;
+    disp.act=Math.min(1,disp.emg/(disp.on*2));
+  }else{
+    if(simOn()){simStep(dt);publishSim(now);}
+    if(live.angle!==null){
+      const target=Math.min(e.start+180,e.start+Math.max(0,live.angle));
+      disp.angle+=(target-disp.angle)*Math.min(1,dt*12);           // suaviza entre datos
+      disp.vel+=(live.vel-disp.vel)*Math.min(1,dt*10);
+    }
+    disp.emg+=(live.emg-disp.emg)*Math.min(1,dt*10);
+    disp.on=live.umbralOn;disp.off=live.umbralOff>0?live.umbralOff:live.umbralOn*0.64;   // el código viejo no manda umbralOff
+    disp.act=disp.on>0?Math.max(0,Math.min(1,disp.emg/(disp.on*2))):0;                 // barra llena = 2x umbral
+    disp.activo=live.activo;disp.calibrando=live.calibrando;
+  }
+  evalStep(dt);
+  hist.push({t:simT,a:disp.angle,v:disp.vel,e:disp.emg});while(hist.length&&hist[0].t<simT-8)hist.shift();
+}
+function frame(ts){if(last===null)last=ts;const dt=Math.min(.05,Math.max(0,(ts-last)/1000));last=ts;
+  if(running&&dt>0)step(dt,ts);draw();requestAnimationFrame(frame);}
+
+/* ---------- controles ---------- */
+const tabs=$('tabs');
+Object.entries(EX).forEach(([k,e])=>{const b=document.createElement('button');b.className='tab';b.dataset.k=k;b.textContent=e.name;b.onclick=()=>setEx(k);tabs.appendChild(b);});
+document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;
+  document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x===b));applyMode();syncSliders();stats={ok:0,total:0};resetEval();});
+document.querySelectorAll('#srcSeg button').forEach(b=>b.onclick=()=>{src=b.dataset.s;
+  document.querySelectorAll('#srcSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  $('liveRows').style.display=src==='live'?'flex':'none';
+  if(src==='demo')badge('bDatos','Datos: —','');
+  resetRun();});
+for(const k in sl)sl[k].oninput=()=>{P[k]=k==='target'?+sl[k].value:+(+sl[k].value).toFixed(1);labels();};
+$('err').onchange=e=>{err=e.target.value;};
+$('play').onclick=()=>{running=!running;$('play').textContent=running?'Pausa':'Reanudar';};
+$('resetC').onclick=()=>{stats={ok:0,total:0};resetEval();};
+$('showS').onchange=e=>{sens.style.display=e.target.checked?'':'none';muscle.style.display=e.target.checked?'':'none';};
+
+setEx('codo');requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
